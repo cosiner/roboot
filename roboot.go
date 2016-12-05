@@ -385,11 +385,15 @@ type Server interface {
 type server struct {
 	defaultRouter Router
 	routers       map[string]Router
+
+	ctx Context
 }
 
-func NewServer() Server {
+func NewServer(ctx Context) Server {
 	return &server{
 		defaultRouter: NewRouter(),
+
+		ctx: ctx,
 	}
 }
 
@@ -445,6 +449,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	sreq := request{
 		req: req,
+		ctx: s.ctx,
 	}
 	sres := response{
 		w: w,
