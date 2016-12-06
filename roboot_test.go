@@ -1,22 +1,22 @@
-package roboot
+package roboot_test
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/cosiner/roboot"
+	"github.com/cosiner/roboot/router"
 )
 
 func TestRoboot(t *testing.T) {
-	s := NewServer(&Env{
-		Errorf:              t.Errorf,
-		FileUploadMaxMemory: 512 << 10,
-	})
+	s := roboot.NewServer(&roboot.Env{}, router.New())
 
 	r := s.Router("")
-	r.Handle("/*path", HandlerFunc(func(ctx *Context) {
+	r.Handle("/*path", roboot.HandlerFunc(func(ctx *roboot.Context) {
 		ctx.Resp.Write([]byte(ctx.Params.Get("path")))
 	}))
-	r.Handle("/user/:id/info", HandlerFunc(func(ctx *Context) {
+	r.Handle("/user/:id/info", roboot.HandlerFunc(func(ctx *roboot.Context) {
 		ctx.Resp.Write([]byte(ctx.Params.Get("id")))
 	}))
 

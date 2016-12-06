@@ -2,14 +2,11 @@ package roboot
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
-
-	"github.com/cosiner/router"
 )
 
 type Params interface {
@@ -268,158 +265,6 @@ type Router interface {
 	MatchHandlerAndFilters(path string) (MatchedHandler, []MatchedFilter)
 }
 
-type routeHandler struct {
-	handler Handler
-	filters []Filter
-}
-
-type serverRouter struct {
-	router router.Tree
-}
-
-func NewRouter() Router {
-	return &serverRouter{}
-}
-
-func (r *serverRouter) addRoute(path string, fn func(routeHandler) (routeHandler, error)) error {
-	return r.router.Add(path, func(h interface{}) (interface{}, error) {
-		var (
-			hd routeHandler
-			ok bool
-		)
-		if h != nil {
-			hd, ok = h.(routeHandler)
-			if !ok {
-				return nil, fmt.Errorf("illegal route handler type: %s", path)
-			}
-		}
-		hd, err := fn(hd)
-		return hd, err
-	})
-}
-
-func (s *serverRouter) Handle(path string, handler Handler) error {
-	return s.addRoute(path, func(hd routeHandler) (routeHandler, error) {
-		if hd.handler != nil {
-			return hd, fmt.Errorf("duplicate route handler: %s", path)
-		}
-		hd.handler = handler
-		return hd, nil
-	})
-}
-
-func (s *serverRouter) Filter(path string, filters ...Filter) error {
-	return s.addRoute(path, func(hd routeHandler) (routeHandler, error) {
-		if hd.handler != nil {
-			return hd, fmt.Errorf("duplicate route handler: %s", path)
-		}
-		c := cap(hd.filters)
-		if c == 0 {
-			hd.filters = filters
-		} else if c-len(hd.filters) < len(filters) {
-			newFilters := make([]Filter, len(hd.filters)+len(filters))
-			copy(newFilters, hd.filters)
-			copy(newFilters[len(hd.filters):], filters)
-			hd.filters = newFilters
-		} else {
-			hd.filters = append(hd.filters, filters...)
-		}
-		return hd, nil
-	})
-}
-
-func (s *serverRouter) Group(prefix string) Router {
-	return groupRouter{
-		prefix: prefix,
-		Router: s,
-	}
-}
-
-func (s *serverRouter) Merge(path string, r Router) error {
-	switch sr := r.(type) {
-	case *serverRouter:
-		return s.router.Add(path, sr.router)
-	case groupRouter:
-		return errors.New("grouped router already be handled and should not to be handled again")
-	default:
-		return errors.New("unsupported rotuer type")
-	}
-}
-
-func (s *serverRouter) parseMatchedHandler(result router.MatchResult) MatchedHandler {
-	if result.Handler == nil {
-		return MatchedHandler{}
-	}
-	return MatchedHandler{
-		Handler: result.Handler.(routeHandler).handler,
-		Params:  result.KeyValues,
-	}
-}
-
-func (s *serverRouter) MatchHandler(path string) MatchedHandler {
-	result := s.router.MatchOne(path)
-	return s.parseMatchedHandler(result)
-}
-
-func (s *serverRouter) parseMatchedFilters(results []router.MatchResult) []MatchedFilter {
-	filters := make([]MatchedFilter, 0, len(results))
-	for i := range results {
-		for _, filter := range results[i].Handler.(routeHandler).filters {
-			filters = append(filters, MatchedFilter{
-				Filter: filter,
-				Params: results[i].KeyValues,
-			})
-		}
-	}
-	return filters
-}
-
-func (s *serverRouter) MatchFilters(path string) []MatchedFilter {
-	results := s.router.MatchAll(path)
-	return s.parseMatchedFilters(results)
-}
-
-func (s *serverRouter) MatchHandlerAndFilters(path string) (MatchedHandler, []MatchedFilter) {
-	h, f := s.router.MatchBoth(path)
-	return s.parseMatchedHandler(h), s.parseMatchedFilters(f)
-}
-
-type groupRouter struct {
-	prefix string
-	Router
-}
-
-func (g groupRouter) Handle(path string, handler Handler) error {
-	return g.Router.Handle(g.prefix+path, handler)
-}
-
-func (g groupRouter) Filter(path string, filters ...Filter) error {
-	return g.Router.Filter(g.prefix+path, filters...)
-}
-
-func (g groupRouter) Group(prefix string) Router {
-	return groupRouter{
-		prefix: g.prefix + prefix,
-		Router: g.Router,
-	}
-}
-
-func (g groupRouter) Merge(prefix string, r Router) error {
-	return g.Router.Merge(g.prefix+prefix, r)
-}
-
-func (g groupRouter) MatchHandler(path string) MatchedHandler {
-	return g.Router.MatchHandler(g.prefix + path)
-}
-
-func (g groupRouter) MatchFilters(path string) []MatchedFilter {
-	return g.Router.MatchFilters(g.prefix + path)
-}
-
-func (g groupRouter) MatchHandlerAndFilters(path string) (MatchedHandler, []MatchedFilter) {
-	return g.Router.MatchHandlerAndFilters(g.prefix + path)
-}
-
 type Server interface {
 	Router(h string) Router
 	Host(h string, r Router)
@@ -433,9 +278,9 @@ type server struct {
 	env *Env
 }
 
-func NewServer(env *Env) Server {
+func NewServer(env *Env, defaultRouter Router) Server {
 	return &server{
-		defaultRouter: NewRouter(),
+		defaultRouter: defaultRouter,
 
 		env: env,
 	}
