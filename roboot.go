@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -12,196 +13,239 @@ import (
 )
 
 type Params interface {
+	Len() int
 	Get(name string) string
 }
 
-type Context interface {
-	LogErrorf(string, ...interface{})
-	FileUploadMaxMemory() int64
+type Logger interface {
+	Error(...interface{})
+	Errorf(string, ...interface{})
 }
 
-type Request interface {
-	setPathParams(params Params)
-	getPathParams() Params
+type stdLoggerT struct{}
 
-	URL() *url.URL
-	Method() string
+var stdLogger Logger = stdLoggerT{}
 
-	PathValue(string) string
-	QueryValue(string) string
-	QueryValues(string) []string
-	BodyValue(string) string
-	BodyValues(string) []string
-	File(string) *multipart.FileHeader
-	Files(string) []*multipart.FileHeader
-
-	Header(string) string
-	Headers(string) []string
-
-	Body() io.Reader
+func (stdLoggerT) Error(v ...interface{}) {
+	log.Println(v...)
 }
 
-type request struct {
-	req         *http.Request
-	queryParams url.Values
-	pathParams  Params
-	ctx         Context
+func (stdLoggerT) Errorf(format string, v ...interface{}) {
+	log.Printf(format, v...)
 }
 
-func (req *request) setPathParams(params Params) {
-	req.pathParams = params
+type Encoder interface {
+	Encode(interface{}) error
 }
 
-func (req *request) getPathParams() Params {
-	return req.pathParams
+type Decoder interface {
+	Decode(interface{}) error
 }
 
-func (r *request) URL() *url.URL {
-	return r.req.URL
+type Codec interface {
+	Marshal(interface{}) ([]byte, error)
+	NewEncoder(io.Writer) Encoder
+	Encode(io.Writer, interface{}) error
+	Unmarshal([]byte, interface{}) error
+	NewDecoder(io.Reader) Decoder
+	Decode(io.Reader, interface{}) error
 }
 
-func (r *request) Method() string {
-	return r.req.Method
+type Renderer interface {
+	Render(io.Writer, string, interface{}) error
 }
 
-func (r *request) PathValue(name string) string {
-	return r.pathParams.Get(name)
+type ErrorHandler interface {
+	Handler(int) Handler
 }
 
-func (r *request) queryValues() url.Values {
-	if r.queryParams == nil {
-		params, err := url.ParseQuery(r.req.URL.RawQuery)
-		if err != nil {
-			r.ctx.LogErrorf("Roboot.Request: parse query failed: %s: %s", r.req.URL.String(), err.Error())
-		}
-		r.queryParams = params
+type ErrorHandlerFunc func(int) Handler
+
+func (e ErrorHandlerFunc) Handler(status int) Handler {
+	return e(status)
+}
+
+type Env struct {
+	FileUpload struct {
+		MaxMemory int64
 	}
-	return r.queryParams
+	Logger
+	Codec
+	Renderer
+	ErrorHandler
 }
 
-func (r *request) QueryValue(name string) string {
-	return r.queryValues().Get(name)
-}
-
-func (r *request) QueryValues(name string) []string {
-	return r.queryValues()[name]
-}
-
-func (r *request) bodyValues() url.Values {
-	if r.req.PostForm == nil {
-		tmpQuery := r.req.URL.RawQuery
-		r.req.URL.RawQuery = ""
-		err := r.req.ParseForm()
-		if err != nil {
-			r.ctx.LogErrorf("Roboot.Request: parse post form failed: %s: %s", r.req.URL.String(), err.Error())
-		}
-		r.req.URL.RawQuery = tmpQuery
+func (e *Env) GetLogger() Logger {
+	logger := e.Logger
+	if logger != nil {
+		return logger
 	}
-	return r.req.PostForm
+	return stdLogger
 }
 
-func (r *request) BodyValue(name string) string {
-	return r.bodyValues().Get(name)
+type Context struct {
+	Params Params
+	Req    *http.Request
+	Resp   http.ResponseWriter
+	Env    *Env
+	Codec  Codec
+
+	encoder Encoder
+	decoder Decoder
+	query   url.Values
 }
 
-func (r *request) BodyValues(name string) []string {
-	return r.bodyValues()[name]
+func (ctx *Context) queryValues() url.Values {
+	if ctx.query == nil {
+		params, err := url.ParseQuery(ctx.Req.URL.RawQuery)
+		if err != nil {
+			ctx.Env.GetLogger().Errorf("Roboot.Request: parse query failed: %s: %s", ctx.Req.URL.String(), err.Error())
+		}
+		ctx.query = params
+	}
+	return ctx.query
 }
 
-func (r *request) multipartFormValues() *multipart.Form {
-	if r.req.MultipartForm == nil {
-		tmpQuery := r.req.URL.RawQuery
-		r.req.URL.RawQuery = ""
+func (ctx *Context) QueryValue(name string) string {
+	return ctx.queryValues().Get(name)
+}
 
-		maxMemory := r.ctx.FileUploadMaxMemory()
+func (ctx *Context) QueryValues(name string) []string {
+	return ctx.queryValues()[name]
+}
+
+func (ctx *Context) bodyValues() url.Values {
+	if ctx.Req.PostForm == nil {
+		tmpQuery := ctx.Req.URL.RawQuery
+		ctx.Req.URL.RawQuery = ""
+		err := ctx.Req.ParseForm()
+		if err != nil {
+			ctx.Env.GetLogger().Errorf("Roboot.Request: parse post form failed: %s: %s", ctx.Req.URL.String(), err.Error())
+		}
+		ctx.Req.URL.RawQuery = tmpQuery
+	}
+	return ctx.Req.PostForm
+}
+
+func (ctx *Context) BodyValue(name string) string {
+	return ctx.bodyValues().Get(name)
+}
+
+func (ctx *Context) BodyValues(name string) []string {
+	return ctx.bodyValues()[name]
+}
+
+func (ctx *Context) multipartFormValues() *multipart.Form {
+	if ctx.Req.MultipartForm == nil {
+		tmpQuery := ctx.Req.URL.RawQuery
+		ctx.Req.URL.RawQuery = ""
+
+		maxMemory := ctx.Env.FileUpload.MaxMemory
 		if maxMemory <= 0 {
 			maxMemory = 32 << 20 //32M
 		}
-		err := r.req.ParseMultipartForm(maxMemory)
+		err := ctx.Req.ParseMultipartForm(maxMemory)
 		if err != nil {
-			r.ctx.LogErrorf("Roboot.Request: parse multipart form failed: %s: %s", r.req.URL.String(), err.Error())
+			ctx.Env.GetLogger().Errorf("Roboot.Request: parse multipart form failed: %s: %s", ctx.Req.URL.String(), err.Error())
 		}
-		r.req.URL.RawQuery = tmpQuery
+		ctx.Req.URL.RawQuery = tmpQuery
 	}
-	return r.req.MultipartForm
+	return ctx.Req.MultipartForm
 }
 
-func (r *request) File(name string) *multipart.FileHeader {
-	files := r.Files(name)
+func (ctx *Context) File(name string) *multipart.FileHeader {
+	files := ctx.Files(name)
 	if len(files) == 0 {
 		return nil
 	}
 	return files[0]
 }
 
-func (r *request) Files(name string) []*multipart.FileHeader {
-	form := r.multipartFormValues()
+func (ctx *Context) Files(name string) []*multipart.FileHeader {
+	form := ctx.multipartFormValues()
 	if form == nil || form.File == nil {
 		return nil
 	}
 	return form.File[name]
 }
 
-func (r *request) Header(name string) string {
-	return r.req.Header.Get(name)
-}
+var (
+	ErrEmptyCodec = errors.New("codec is empty")
+)
 
-func (r *request) Headers(name string) []string {
-	return r.req.Header[name]
-}
-
-func (r *request) Body() io.Reader {
-	return r.req.Body
-}
-
-type Response interface {
-	Status(int)
-
-	Header(string, string)
-	Headers(string, ...string)
-
-	Body() io.Writer
-}
-
-type response struct {
-	w http.ResponseWriter
-}
-
-func (r *response) Status(code int) {
-	r.w.WriteHeader(code)
-}
-
-func (r *response) Header(name, value string) {
-	r.w.Header().Set(name, value)
-}
-
-func (r *response) Headers(name string, values ...string) {
-	if len(values) == 0 {
-		r.w.Header().Del(name)
-	} else {
-		for _, value := range values {
-			r.w.Header().Add(name, value)
-		}
+func (ctx *Context) GetCodec() Codec {
+	if ctx.Codec != nil {
+		return ctx.Codec
 	}
+	return ctx.Env.Codec
 }
 
-func (r *response) Body() io.Writer {
-	return r.w
+func (ctx *Context) Decode(obj interface{}) error {
+	if ctx.decoder == nil {
+		codec := ctx.GetCodec()
+		if codec == nil {
+			return ErrEmptyCodec
+		}
+		ctx.decoder = codec.NewDecoder(ctx.Req.Body)
+	}
+	return ctx.decoder.Decode(obj)
+}
+
+func (ctx *Context) Encode(obj interface{}) error {
+	if ctx.encoder == nil {
+		codec := ctx.GetCodec()
+		if codec == nil {
+			return ErrEmptyCodec
+		}
+		ctx.encoder = codec.NewEncoder(ctx.Resp)
+	}
+	return ctx.encoder.Encode(obj)
+}
+
+var (
+	ErrEmptyRenderer = errors.New("renderer is empty")
+)
+
+func (ctx *Context) Render(name string, v interface{}) error {
+	renderer := ctx.Env.Renderer
+	if renderer == nil {
+		return ErrEmptyRenderer
+	}
+	return renderer.Render(ctx.Resp, name, v)
+}
+
+func (ctx *Context) Error(status int) {
+	var (
+		handler Handler
+		eh      = ctx.Env.ErrorHandler
+	)
+	if eh != nil {
+		handler = eh.Handler(status)
+		return
+	}
+	if handler == nil {
+		ctx.Resp.WriteHeader(status)
+		return
+	}
+
+	handler.Handle(ctx)
 }
 
 type Handler interface {
-	Handle(req Request, res Response)
+	Handle(*Context)
 }
 
-type HandlerFunc func(Request, Response)
+type HandlerFunc func(*Context)
 
-func (f HandlerFunc) Handle(req Request, res Response) {
-	f(req, res)
+func (f HandlerFunc) Handle(ctx *Context) {
+	f(ctx)
 }
 
 type Filter interface {
-	Filter(req Request, res Response, chain HandlerFunc)
+	Filter(ctx *Context, chain HandlerFunc)
 }
+
+type FilterFunc func(ctx *Context, chain HandlerFunc)
 
 type MatchedHandler struct {
 	Handler
@@ -386,14 +430,14 @@ type server struct {
 	defaultRouter Router
 	routers       map[string]Router
 
-	ctx Context
+	env *Env
 }
 
-func NewServer(ctx Context) Server {
+func NewServer(env *Env) Server {
 	return &server{
 		defaultRouter: NewRouter(),
 
-		ctx: ctx,
+		env: env,
 	}
 }
 
@@ -421,42 +465,42 @@ type filterHandler struct {
 	handler MatchedHandler
 }
 
-func (f *filterHandler) Handle(req Request, res Response) {
-	originParams := req.getPathParams()
+func (f *filterHandler) Handle(ctx *Context) {
+	oldP := ctx.Params
 	if len(f.filters) == 0 {
-		req.setPathParams(f.handler.Params)
-		f.handler.Handler.Handle(req, res)
+		ctx.Params = f.handler.Params
+		f.handler.Handler.Handle(ctx)
 	} else {
 		filter := f.filters[0]
 		f.filters = f.filters[1:]
-		req.setPathParams(filter.Params)
-		filter.Filter.Filter(req, res, f.Handle)
+		ctx.Params = filter.Params
+		filter.Filter.Filter(ctx, f.Handle)
 	}
-	req.setPathParams(originParams)
+	ctx.Params = oldP
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	ctx := Context{
+		Req:  req,
+		Resp: w,
+		Env:  s.env,
+	}
 	r := s.Router(req.URL.Host)
 	if r == nil {
-		w.WriteHeader(http.StatusNotFound)
+		ctx.Error(http.StatusNotFound)
 		return
 	}
 
 	handler, filters := r.MatchHandlerAndFilters(req.URL.Path)
 	if handler.Handler == nil {
-		handler.Handler = HandlerFunc(NotFoundHandler)
-	}
-
-	sreq := request{
-		req: req,
-		ctx: s.ctx,
-	}
-	sres := response{
-		w: w,
+		handler.Handler = HandlerFunc(func(ctx *Context) {
+			ctx.Error(http.StatusNotFound)
+		})
 	}
 	h := filterHandler{
 		filters: filters,
 		handler: handler,
 	}
-	h.Handle(&sreq, &sres)
+
+	h.Handle(&ctx)
 }
