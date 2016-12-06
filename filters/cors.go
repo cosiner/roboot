@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cosiner/gohper/strings2"
 	"github.com/cosiner/roboot"
 )
 
@@ -108,7 +107,14 @@ func (c *corsFilter) preflight(ctx *roboot.Context, method, headers string) {
 		}
 	}
 
-	for _, h := range strings2.SplitAndTrim(headers, ",") {
+	var hdrs []string
+	if headers != "" {
+		hdrs = strings.Split(headers, ",")
+		for i := range hdrs {
+			hdrs[i] = strings.TrimSpace(hdrs[i])
+		}
+	}
+	for _, h := range hdrs {
 		for _, ch := range c.headers {
 			if strings.ToLower(h) == ch { // c.Headers already ToLowered when Init
 				respHeaders.Add(HEADER_CORS_ALLOWHEADERS, ch)
