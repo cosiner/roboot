@@ -11,7 +11,7 @@ import (
 type JSONP string
 
 type buffRespWriter struct {
-	http.ResponseWriter
+	roboot.ResponseWriter
 	Buffer *bytes.Buffer
 }
 

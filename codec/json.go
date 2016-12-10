@@ -9,6 +9,7 @@ import (
 )
 
 var JSON roboot.Codec = &FuncCodec{
+	ContentTyp:  "application/json",
 	MarshalFunc: json.Marshal,
 	NewEncoderFunc: func(w io.Writer) roboot.Encoder {
 		return json.NewEncoder(w)

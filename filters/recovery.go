@@ -11,7 +11,7 @@ type Recovery struct {
 	Bufsize int
 }
 
-func (r *Recovery) Filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
+func (r Recovery) Filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
 	const DEFAULT_BUFSIZE = 4096
 	defer func() {
 		if err := recover(); err != nil {

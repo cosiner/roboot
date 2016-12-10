@@ -28,6 +28,7 @@ func (f FuncDecoder) Decode(v interface{}) error {
 }
 
 type FuncCodec struct {
+	ContentTyp     string
 	MarshalFunc    func(interface{}) ([]byte, error)
 	NewEncoderFunc func(io.Writer) roboot.Encoder
 	EncodeFunc     func(io.Writer, interface{}) error
@@ -40,6 +41,10 @@ var (
 	ErrMarshalUnimplemented   = errors.New("marshal is not implemented")
 	ErrUnmarshalUnimplemented = errors.New("unmarshal is not implemented")
 )
+
+func (f *FuncCodec) ContentType() string {
+	return f.ContentTyp
+}
 
 func (f *FuncCodec) Encode(w io.Writer, v interface{}) error {
 	if f.EncodeFunc != nil {

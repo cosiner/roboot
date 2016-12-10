@@ -37,23 +37,23 @@ type wrappedBase struct {
 
 func (w wrappedBase) Handle(ctx *roboot.Context) {
 	switch ctx.Req.Method {
-	case http.MethodGet:
+	case roboot.METHOD_GET:
 		w.Get(ctx)
-	case http.MethodPost:
+	case roboot.METHOD_POST:
 		w.Post(ctx)
-	case http.MethodDelete:
+	case roboot.METHOD_DELETE:
 		w.Delete(ctx)
-	case http.MethodPut:
+	case roboot.METHOD_PUT:
 		w.Put(ctx)
-	case http.MethodPatch:
+	case roboot.METHOD_PATCH:
 		w.Patch(ctx)
-	case http.MethodHead:
+	case roboot.METHOD_HEAD:
 		w.Head(ctx)
-	case http.MethodOptions:
+	case roboot.METHOD_OPTIONS:
 		w.Options(ctx)
-	case http.MethodTrace:
+	case roboot.METHOD_TRACE:
 		w.Trace(ctx)
-	case http.MethodConnect:
+	case roboot.METHOD_CONNECT:
 		w.Connect(ctx)
 	default:
 		ctx.Resp.WriteHeader(http.StatusMethodNotAllowed)

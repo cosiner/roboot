@@ -40,6 +40,7 @@ type Decoder interface {
 }
 
 type Codec interface {
+	ContentType() string
 	Marshal(interface{}) ([]byte, error)
 	NewEncoder(io.Writer) Encoder
 	Encode(io.Writer, interface{}) error
@@ -80,10 +81,43 @@ func (e *Env) GetLogger() Logger {
 	return stdLogger
 }
 
+type respWriter struct {
+	statusCode int
+	http.ResponseWriter
+}
+
+func (r *respWriter) WriteHeader(status int) {
+	if r.statusCode > 0 {
+		return
+	}
+	r.ResponseWriter.WriteHeader(status)
+	r.statusCode = status
+}
+
+func (r *respWriter) Write(b []byte) (int, error) {
+	n, err := r.ResponseWriter.Write(b)
+	if err == nil && r.statusCode == 0 {
+		r.statusCode = http.StatusOK
+	}
+	return n, err
+}
+
+func (r *respWriter) StatusCode() int {
+	if r.statusCode == 0 {
+		return http.StatusOK
+	}
+	return r.statusCode
+}
+
+type ResponseWriter interface {
+	StatusCode() int
+	http.ResponseWriter
+}
+
 type Context struct {
 	Params Params
 	Req    *http.Request
-	Resp   http.ResponseWriter
+	Resp   ResponseWriter
 	Env    *Env
 	Codec  Codec
 
@@ -189,12 +223,16 @@ func (ctx *Context) Decode(obj interface{}) error {
 }
 
 func (ctx *Context) Encode(obj interface{}) error {
+	codec := ctx.GetCodec()
 	if ctx.encoder == nil {
-		codec := ctx.GetCodec()
 		if codec == nil {
 			return ErrEmptyCodec
 		}
 		ctx.encoder = codec.NewEncoder(ctx.Resp)
+	}
+	typ := ctx.Resp.Header().Get(HEADER_CONTENT_TYPE)
+	if typ == "" {
+		ctx.Resp.Header().Set(HEADER_CONTENT_TYPE, codec.ContentType())
 	}
 	return ctx.encoder.Encode(obj)
 }
@@ -266,6 +304,7 @@ type Router interface {
 }
 
 type Server interface {
+	Env() *Env
 	Router(h string) Router
 	Host(h string, r Router)
 	http.Handler
@@ -284,6 +323,10 @@ func NewServer(env *Env, defaultRouter Router) Server {
 
 		env: env,
 	}
+}
+
+func (s *server) Env() *Env {
+	return s.env
 }
 
 func (s *server) Router(host string) Router {
@@ -327,7 +370,7 @@ func (f *filterHandler) Handle(ctx *Context) {
 func (s *server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := Context{
 		Req:  req,
-		Resp: w,
+		Resp: &respWriter{ResponseWriter: w},
 		Env:  s.env,
 	}
 	r := s.Router(req.URL.Host)

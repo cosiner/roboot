@@ -8,6 +8,7 @@ import (
 )
 
 var XML roboot.Codec = &FuncCodec{
+	ContentTyp:  "application/xml",
 	MarshalFunc: xml.Marshal,
 	NewEncoderFunc: func(w io.Writer) roboot.Encoder {
 		return xml.NewEncoder(w)
