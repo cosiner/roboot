@@ -50,9 +50,6 @@ func (s *serverRouter) Handle(path string, handler roboot.Handler) error {
 
 func (s *serverRouter) Filter(path string, filters ...roboot.Filter) error {
 	return s.addRoute(path, func(hd routeHandler) (routeHandler, error) {
-		if hd.handler != nil {
-			return hd, fmt.Errorf("duplicate route handler: %s", path)
-		}
 		c := cap(hd.filters)
 		if c == 0 {
 			hd.filters = filters

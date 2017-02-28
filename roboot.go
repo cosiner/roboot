@@ -222,7 +222,7 @@ func (ctx *Context) Decode(obj interface{}) error {
 	return ctx.decoder.Decode(obj)
 }
 
-func (ctx *Context) Encode(obj interface{}) error {
+func (ctx *Context) Encode(obj interface{}, status int) error {
 	codec := ctx.GetCodec()
 	if ctx.encoder == nil {
 		if codec == nil {
@@ -234,6 +234,10 @@ func (ctx *Context) Encode(obj interface{}) error {
 	if typ == "" {
 		ctx.Resp.Header().Set(HEADER_CONTENT_TYPE, codec.ContentType())
 	}
+	if status == 0 {
+		status = http.StatusOK
+	}
+	ctx.Resp.WriteHeader(status)
 	return ctx.encoder.Encode(obj)
 }
 
@@ -256,7 +260,6 @@ func (ctx *Context) Error(status int) {
 	)
 	if eh != nil {
 		handler = eh.Handler(status)
-		return
 	}
 	if handler == nil {
 		ctx.Resp.WriteHeader(status)
@@ -314,10 +317,10 @@ type server struct {
 	defaultRouter Router
 	routers       map[string]Router
 
-	env *Env
+	env Env
 }
 
-func NewServer(env *Env, defaultRouter Router) Server {
+func NewServer(env Env, defaultRouter Router) Server {
 	return &server{
 		defaultRouter: defaultRouter,
 
@@ -326,7 +329,7 @@ func NewServer(env *Env, defaultRouter Router) Server {
 }
 
 func (s *server) Env() *Env {
-	return s.env
+	return &s.env
 }
 
 func (s *server) Router(host string) Router {
@@ -371,7 +374,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := Context{
 		Req:  req,
 		Resp: &respWriter{ResponseWriter: w},
-		Env:  s.env,
+		Env:  &s.env,
 	}
 	r := s.Router(req.URL.Host)
 	if r == nil {
