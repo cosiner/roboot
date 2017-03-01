@@ -2,7 +2,6 @@ package filters
 
 import (
 	"bytes"
-	"net/http"
 
 	"github.com/cosiner/roboot"
 )
@@ -23,7 +22,7 @@ func (w *buffRespWriter) Write(b []byte) (int, error) {
 }
 
 func (j JSONP) Filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
-	if ctx.Req.Method != http.MethodGet {
+	if ctx.Req.Method != roboot.MethodGet {
 		chain(ctx)
 		return
 	}

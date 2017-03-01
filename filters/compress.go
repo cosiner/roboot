@@ -68,7 +68,7 @@ func (w flateWriter) Close() error {
 }
 
 func gzipCompress(w roboot.ResponseWriter) (roboot.ResponseWriter, bool) {
-	w.Header().Set(roboot.HEADER_CONTENT_ENCODING, roboot.CONTENT_ENCODING_GZIP)
+	w.Header().Set(roboot.HeaderContentEncoding, roboot.ContentEncodingGzip)
 	return gzipWriter{
 		gw:             gzip.NewWriter(w),
 		ResponseWriter: w,
@@ -81,7 +81,7 @@ func flateCompress(w roboot.ResponseWriter) (roboot.ResponseWriter, bool) {
 		return w, false
 	}
 
-	w.Header().Set(roboot.HEADER_CONTENT_ENCODING, roboot.CONTENT_ENCODING_DEFLATE)
+	w.Header().Set(roboot.HeaderContentEncoding, roboot.ContentEncodingDeflate)
 	return flateWriter{
 		fw:             fw,
 		ResponseWriter: w,
@@ -89,21 +89,21 @@ func flateCompress(w roboot.ResponseWriter) (roboot.ResponseWriter, bool) {
 }
 
 func Compress(ctx *roboot.Context, chain roboot.HandlerFunc) {
-	encoding := ctx.Req.Header.Get(roboot.HEADER_ACCEPT_ENCODING)
+	encoding := ctx.Req.Header.Get(roboot.HeaderAcceptEncoding)
 
 	var (
 		needClose bool
 		oldW      = ctx.Resp
 	)
-	if strings.Contains(encoding, roboot.CONTENT_ENCODING_GZIP) {
+	if strings.Contains(encoding, roboot.ContentEncodingGzip) {
 		ctx.Resp, needClose = gzipCompress(oldW)
-	} else if strings.Contains(encoding, roboot.CONTENT_ENCODING_DEFLATE) {
+	} else if strings.Contains(encoding, roboot.ContentEncodingDeflate) {
 		ctx.Resp, needClose = flateCompress(oldW)
 	}
 
 	chain(ctx)
 	if needClose {
-		ctx.Resp.Header().Del(roboot.HEADER_CONTENT_LENGTH)
+		ctx.Resp.Header().Del(roboot.HeaderContentLength)
 		cw, ok := ctx.Resp.(io.Closer)
 		if ok {
 			cw.Close()

@@ -7,6 +7,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+
+	"github.com/cosiner/httperrs"
 )
 
 type Params interface {
@@ -54,13 +56,13 @@ type Renderer interface {
 }
 
 type ErrorHandler interface {
-	Handler(int) Handler
+	Handle(ctx *Context, status int, err error)
 }
 
-type ErrorHandlerFunc func(int) Handler
+type ErrorHandlerFunc func(*Context, int, error)
 
-func (e ErrorHandlerFunc) Handler(status int) Handler {
-	return e(status)
+func (e ErrorHandlerFunc) Handler(ctx *Context, status int, err error) {
+	e(ctx, status, err)
 }
 
 type Env struct {
@@ -222,6 +224,10 @@ func (ctx *Context) Decode(obj interface{}) error {
 	return ctx.decoder.Decode(obj)
 }
 
+func (ctx *Context) Status(code int) {
+	ctx.Resp.WriteHeader(code)
+}
+
 func (ctx *Context) Encode(obj interface{}, status int) error {
 	codec := ctx.GetCodec()
 	if ctx.encoder == nil {
@@ -230,9 +236,9 @@ func (ctx *Context) Encode(obj interface{}, status int) error {
 		}
 		ctx.encoder = codec.NewEncoder(ctx.Resp)
 	}
-	typ := ctx.Resp.Header().Get(HEADER_CONTENT_TYPE)
+	typ := ctx.Resp.Header().Get(HeaderContentType)
 	if typ == "" {
-		ctx.Resp.Header().Set(HEADER_CONTENT_TYPE, codec.ContentType())
+		ctx.Resp.Header().Set(HeaderContentType, codec.ContentType())
 	}
 	if status == 0 {
 		status = http.StatusOK
@@ -253,20 +259,21 @@ func (ctx *Context) Render(name string, v interface{}) error {
 	return renderer.Render(ctx.Resp, name, v)
 }
 
-func (ctx *Context) Error(status int) {
-	var (
-		handler Handler
-		eh      = ctx.Env.ErrorHandler
-	)
-	if eh != nil {
-		handler = eh.Handler(status)
+func (ctx *Context) Error(err error) {
+	type errorInfo struct {
+		Error string `json:"error"`
 	}
-	if handler == nil {
-		ctx.Resp.WriteHeader(status)
-		return
+	statusCode := httperrs.StatusCode(err, http.StatusInternalServerError)
+	if ctx.Env.ErrorHandler == nil {
+		if statusCode >= http.StatusInternalServerError {
+			ctx.Env.GetLogger().Error("server failed:", err.Error())
+			ctx.Status(statusCode)
+		} else {
+			ctx.Encode(errorInfo{Error: err.Error()}, http.StatusInternalServerError)
+		}
+	} else {
+		ctx.Env.ErrorHandler.Handle(ctx, statusCode, err)
 	}
-
-	handler.Handle(ctx)
 }
 
 type Handler interface {
@@ -378,14 +385,14 @@ func (s *server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	r := s.Router(req.URL.Host)
 	if r == nil {
-		ctx.Error(http.StatusNotFound)
+		ctx.Status(http.StatusNotFound)
 		return
 	}
 
 	handler, filters := r.MatchHandlerAndFilters(req.URL.Path)
 	if handler.Handler == nil {
 		handler.Handler = HandlerFunc(func(ctx *Context) {
-			ctx.Error(http.StatusNotFound)
+			ctx.Status(http.StatusNotFound)
 		})
 	}
 	h := filterHandler{

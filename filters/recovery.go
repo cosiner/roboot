@@ -12,13 +12,13 @@ type Recovery struct {
 }
 
 func (r Recovery) Filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
-	const DEFAULT_BUFSIZE = 4096
+	const defaultBufsize = 4096
 	defer func() {
 		if err := recover(); err != nil {
 
 			bufsize := r.Bufsize
 			if bufsize <= 0 {
-				bufsize = DEFAULT_BUFSIZE
+				bufsize = defaultBufsize
 			}
 			buf := make([]byte, bufsize)
 			n := runtime.Stack(buf, false)

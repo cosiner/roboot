@@ -65,13 +65,13 @@ func (f *FuncCodec) Encode(w io.Writer, v interface{}) error {
 }
 
 func (f *FuncCodec) Marshal(v interface{}) ([]byte, error) {
-	const DEFAULT_BUFSIZE = 2048
+	const defaultBufsize = 2048
 	if f.MarshalFunc != nil {
 		return f.MarshalFunc(v)
 	}
 
 	if f.EncodeFunc != nil || f.NewEncoderFunc != nil {
-		buffer := bytes.NewBuffer(make([]byte, 0, DEFAULT_BUFSIZE))
+		buffer := bytes.NewBuffer(make([]byte, 0, defaultBufsize))
 		err := f.Encode(buffer, v)
 		return buffer.Bytes(), err
 	}

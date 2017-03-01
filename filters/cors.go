@@ -38,13 +38,13 @@ func (c *CORS) ToFilter() roboot.Filter {
 
 	f.methods = c.Methods
 	if len(f.methods) == 0 {
-		f.methods = []string{roboot.METHOD_GET, roboot.METHOD_POST, roboot.METHOD_PATCH, roboot.METHOD_PUT, roboot.METHOD_DELETE}
+		f.methods = []string{roboot.MethodGet, roboot.MethodPost, roboot.MethodPatch, roboot.MethodPut, roboot.MethodDelete}
 	}
 	f.methodsStr = strings.Join(c.Methods, ",")
 
 	f.headers = c.Headers
 	if len(f.headers) == 0 {
-		f.headers = []string{roboot.HEADER_ORIGIN, roboot.HEADER_ACCEPT, roboot.HEADER_CONTENT_TYPE, roboot.HEADER_AUTHORIZATION}
+		f.headers = []string{roboot.HeaderOrigin, roboot.HeaderAccept, roboot.HeaderContentType, roboot.HeaderAuthorization}
 	}
 	f.headersStr = strings.Join(c.Headers, ",")
 	for i := range c.Headers {
@@ -74,7 +74,7 @@ func (c *corsFilter) allow(origin string) bool {
 func (c *corsFilter) preflight(ctx *roboot.Context, method, headers string) {
 	origin := "*"
 	if len(c.origins) != 0 {
-		origin = ctx.Req.Header.Get(roboot.HEADER_ORIGIN)
+		origin = ctx.Req.Header.Get(roboot.HeaderOrigin)
 		if !c.allow(origin) {
 			ctx.Resp.WriteHeader(http.StatusOK)
 			return
@@ -82,12 +82,12 @@ func (c *corsFilter) preflight(ctx *roboot.Context, method, headers string) {
 	}
 
 	respHeaders := ctx.Resp.Header()
-	respHeaders.Set(roboot.HEADER_CORS_ALLOWORIGIN, origin)
+	respHeaders.Set(roboot.HeaderCorsAlloworigin, origin)
 	upperMethod := strings.ToUpper(method)
 
 	for _, m := range c.methods {
 		if m == upperMethod {
-			respHeaders.Add(roboot.HEADER_CORS_ALLOWMETHODS, method)
+			respHeaders.Add(roboot.HeaderCorsAllowmethods, method)
 			break
 		}
 	}
@@ -102,19 +102,19 @@ func (c *corsFilter) preflight(ctx *roboot.Context, method, headers string) {
 	for _, h := range hdrs {
 		for _, ch := range c.headers {
 			if strings.ToLower(h) == ch { // c.Headers already ToLowered when Init
-				respHeaders.Add(roboot.HEADER_CORS_ALLOWHEADERS, ch)
+				respHeaders.Add(roboot.HeaderCorsAllowheaders, ch)
 				break
 			}
 		}
 	}
 
-	respHeaders.Set(roboot.HEADER_CORS_ALLOWCREDENTIALS, c.allowCredentials)
+	respHeaders.Set(roboot.HeaderCorsAllowcredentials, c.allowCredentials)
 	if c.exposeHeadersStr != "" {
-		respHeaders.Set(roboot.HEADER_CORS_EXPOSEHEADERS, c.exposeHeadersStr)
+		respHeaders.Set(roboot.HeaderCorsExposeheaders, c.exposeHeadersStr)
 	}
 
 	if c.preflightMaxage != "" {
-		respHeaders.Set(roboot.HEADER_CORS_MAXAGE, c.preflightMaxage)
+		respHeaders.Set(roboot.HeaderCorsMaxage, c.preflightMaxage)
 	}
 
 	ctx.Resp.WriteHeader(http.StatusOK)
@@ -124,33 +124,33 @@ func (c *corsFilter) filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
 	headers := ctx.Resp.Header()
 	origin := "*"
 	if len(c.origins) != 0 {
-		origin = ctx.Req.Header.Get(roboot.HEADER_ORIGIN)
+		origin = ctx.Req.Header.Get(roboot.HeaderOrigin)
 		if !c.allow(origin) {
 			ctx.Resp.WriteHeader(http.StatusForbidden)
 			return
 		}
 	}
-	headers.Set(roboot.HEADER_CORS_ALLOWORIGIN, origin)
+	headers.Set(roboot.HeaderCorsAlloworigin, origin)
 
-	headers.Set(roboot.HEADER_CORS_ALLOWMETHODS, c.methodsStr)
-	headers.Set(roboot.HEADER_CORS_ALLOWHEADERS, c.headersStr)
+	headers.Set(roboot.HeaderCorsAllowmethods, c.methodsStr)
+	headers.Set(roboot.HeaderCorsAllowheaders, c.headersStr)
 
-	headers.Set(roboot.HEADER_CORS_ALLOWCREDENTIALS, c.allowCredentials)
+	headers.Set(roboot.HeaderCorsAllowcredentials, c.allowCredentials)
 	if c.exposeHeadersStr != "" {
-		headers.Set(roboot.HEADER_CORS_EXPOSEHEADERS, c.exposeHeadersStr)
+		headers.Set(roboot.HeaderCorsExposeheaders, c.exposeHeadersStr)
 	}
 	if c.preflightMaxage != "" {
-		headers.Set(roboot.HEADER_CORS_MAXAGE, c.preflightMaxage)
+		headers.Set(roboot.HeaderCorsMaxage, c.preflightMaxage)
 	}
 
 	chain(ctx)
 }
 
 func (c *corsFilter) Filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
-	reqMethod := ctx.Req.Header.Get(roboot.HEADER_CORS_REQUESTMETHOD)
-	reqHeaders := ctx.Req.Header.Get(roboot.HEADER_CORS_REQUESTHEADERS)
+	reqMethod := ctx.Req.Header.Get(roboot.HeaderCorsRequestmethod)
+	reqHeaders := ctx.Req.Header.Get(roboot.HeaderCorsRequestheaders)
 
-	if ctx.Req.Method == roboot.METHOD_OPTIONS && (reqMethod != "" || reqHeaders != "") {
+	if ctx.Req.Method == roboot.MethodOptions && (reqMethod != "" || reqHeaders != "") {
 		c.preflight(ctx, reqMethod, reqHeaders)
 	} else {
 		c.filter(ctx, chain)

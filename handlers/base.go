@@ -39,23 +39,23 @@ type wrappedMethodBase struct {
 
 func (w wrappedMethodBase) Handle(ctx *roboot.Context) {
 	switch ctx.Req.Method {
-	case roboot.METHOD_GET:
+	case roboot.MethodGet:
 		w.Get(ctx)
-	case roboot.METHOD_POST:
+	case roboot.MethodPost:
 		w.Post(ctx)
-	case roboot.METHOD_DELETE:
+	case roboot.MethodDelete:
 		w.Delete(ctx)
-	case roboot.METHOD_PUT:
+	case roboot.MethodPut:
 		w.Put(ctx)
-	case roboot.METHOD_PATCH:
+	case roboot.MethodPatch:
 		w.Patch(ctx)
-	case roboot.METHOD_HEAD:
+	case roboot.MethodHead:
 		w.Head(ctx)
-	case roboot.METHOD_OPTIONS:
+	case roboot.MethodOptions:
 		w.Options(ctx)
-	case roboot.METHOD_TRACE:
+	case roboot.MethodTrace:
 		w.Trace(ctx)
-	case roboot.METHOD_CONNECT:
+	case roboot.MethodConnect:
 		w.Connect(ctx)
 	default:
 		ctx.Resp.WriteHeader(http.StatusMethodNotAllowed)
@@ -97,23 +97,23 @@ type wrappedActionBase struct {
 
 func (w wrappedActionBase) Handle(ctx *roboot.Context) {
 	switch ctx.Req.Method {
-	case roboot.METHOD_GET:
+	case roboot.MethodGet:
 		w.Query(ctx)
-	case roboot.METHOD_POST:
+	case roboot.MethodPost:
 		w.Create(ctx)
-	case roboot.METHOD_DELETE:
+	case roboot.MethodDelete:
 		w.Delete(ctx)
-	case roboot.METHOD_PUT:
+	case roboot.MethodPut:
 		w.CreateOrUpdate(ctx)
-	case roboot.METHOD_PATCH:
+	case roboot.MethodPatch:
 		w.Update(ctx)
-	case roboot.METHOD_HEAD:
+	case roboot.MethodHead:
 		w.Head(ctx)
-	case roboot.METHOD_OPTIONS:
+	case roboot.MethodOptions:
 		w.Options(ctx)
-	case roboot.METHOD_TRACE:
+	case roboot.MethodTrace:
 		w.Trace(ctx)
-	case roboot.METHOD_CONNECT:
+	case roboot.MethodConnect:
 		w.Connect(ctx)
 	default:
 		ctx.Resp.WriteHeader(http.StatusMethodNotAllowed)
