@@ -269,7 +269,7 @@ func (ctx *Context) Error(err error) {
 			ctx.Env.GetLogger().Error("server failed:", err.Error())
 			ctx.Status(statusCode)
 		} else {
-			ctx.Encode(errorInfo{Error: err.Error()}, http.StatusInternalServerError)
+			ctx.Encode(errorInfo{Error: err.Error()}, statusCode)
 		}
 	} else {
 		ctx.Env.ErrorHandler.Handle(ctx, statusCode, err)
