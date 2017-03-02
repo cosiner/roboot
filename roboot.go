@@ -245,7 +245,7 @@ func (ctx *Context) Encode(obj interface{}, status int) error {
 	if status == 0 {
 		status = http.StatusOK
 	}
-	ctx.Resp.WriteHeader(status)
+	ctx.Status(status)
 	return ctx.encoder.Encode(obj)
 }
 

@@ -2,7 +2,6 @@ package codec
 
 import (
 	"encoding/json"
-
 	"io"
 
 	"github.com/cosiner/roboot"

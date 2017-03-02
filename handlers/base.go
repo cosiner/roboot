@@ -23,15 +23,15 @@ type NopMethodBase struct {
 
 var _ MethodBase = NopMethodBase{}
 
-func (NopMethodBase) Get(ctx *roboot.Context)     { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopMethodBase) Post(ctx *roboot.Context)    { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopMethodBase) Delete(ctx *roboot.Context)  { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopMethodBase) Put(ctx *roboot.Context)     { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopMethodBase) Patch(ctx *roboot.Context)   { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopMethodBase) Head(ctx *roboot.Context)    { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopMethodBase) Options(ctx *roboot.Context) { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopMethodBase) Trace(ctx *roboot.Context)   { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopMethodBase) Connect(ctx *roboot.Context) { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
+func (NopMethodBase) Get(ctx *roboot.Context)     { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopMethodBase) Post(ctx *roboot.Context)    { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopMethodBase) Delete(ctx *roboot.Context)  { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopMethodBase) Put(ctx *roboot.Context)     { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopMethodBase) Patch(ctx *roboot.Context)   { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopMethodBase) Head(ctx *roboot.Context)    { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopMethodBase) Options(ctx *roboot.Context) { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopMethodBase) Trace(ctx *roboot.Context)   { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopMethodBase) Connect(ctx *roboot.Context) { ctx.Status(http.StatusMethodNotAllowed) }
 
 type wrappedMethodBase struct {
 	MethodBase
@@ -58,7 +58,7 @@ func (w wrappedMethodBase) Handle(ctx *roboot.Context) {
 	case roboot.MethodConnect:
 		w.Connect(ctx)
 	default:
-		ctx.Resp.WriteHeader(http.StatusMethodNotAllowed)
+		ctx.Status(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -79,17 +79,17 @@ type NopActionBase struct {
 
 var _ ActionBase = NopActionBase{}
 
-func (NopActionBase) Query(ctx *roboot.Context)  { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopActionBase) Create(ctx *roboot.Context) { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopActionBase) Delete(ctx *roboot.Context) { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopActionBase) Update(ctx *roboot.Context) { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopActionBase) Head(ctx *roboot.Context)   { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
+func (NopActionBase) Query(ctx *roboot.Context)  { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopActionBase) Create(ctx *roboot.Context) { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopActionBase) Delete(ctx *roboot.Context) { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopActionBase) Update(ctx *roboot.Context) { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopActionBase) Head(ctx *roboot.Context)   { ctx.Status(http.StatusMethodNotAllowed) }
 func (NopActionBase) CreateOrUpdate(ctx *roboot.Context) {
-	ctx.Resp.WriteHeader(http.StatusMethodNotAllowed)
+	ctx.Status(http.StatusMethodNotAllowed)
 }
-func (NopActionBase) Options(ctx *roboot.Context) { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopActionBase) Trace(ctx *roboot.Context)   { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
-func (NopActionBase) Connect(ctx *roboot.Context) { ctx.Resp.WriteHeader(http.StatusMethodNotAllowed) }
+func (NopActionBase) Options(ctx *roboot.Context) { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopActionBase) Trace(ctx *roboot.Context)   { ctx.Status(http.StatusMethodNotAllowed) }
+func (NopActionBase) Connect(ctx *roboot.Context) { ctx.Status(http.StatusMethodNotAllowed) }
 
 type wrappedActionBase struct {
 	ActionBase
@@ -116,7 +116,7 @@ func (w wrappedActionBase) Handle(ctx *roboot.Context) {
 	case roboot.MethodConnect:
 		w.Connect(ctx)
 	default:
-		ctx.Resp.WriteHeader(http.StatusMethodNotAllowed)
+		ctx.Status(http.StatusMethodNotAllowed)
 	}
 }
 

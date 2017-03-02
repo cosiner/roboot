@@ -16,15 +16,15 @@ const (
 	HeaderOrigin = "Origin"
 
 	// CORS
-	HeaderCorsRequestmethod  = "Access-Control-Request-Method"
-	HeaderCorsRequestheaders = "Access-Control-Request-Headers"
+	HeaderCorsRequestMethod  = "Access-Control-Request-Method"
+	HeaderCorsRequestHeaders = "Access-Control-Request-Headers"
 
-	HeaderCorsAlloworigin      = "Access-Control-Allow-Origin"
-	HeaderCorsAllowcredentials = "Access-Control-Allow-Credentials"
-	HeaderCorsAllowheaders     = "Access-Control-Allow-Headers"
-	HeaderCorsAllowmethods     = "Access-Control-Allow-Methods"
-	HeaderCorsExposeheaders    = "Access-Control-Expose-Headers"
-	HeaderCorsMaxage           = "Access-Control-Max-Age"
+	HeaderCorsAllowOrigin = "Access-Control-Allow-Origin"
+	HeaderCorsAllowCredentials = "Access-Control-Allow-Credentials"
+	HeaderCorsAllowHeaders     = "Access-Control-Allow-Headers"
+	HeaderCorsAllowMethods     = "Access-Control-Allow-Methods"
+	HeaderCorsExposeHeaders    = "Access-Control-Expose-Headers"
+	HeaderCorsMaxAge           = "Access-Control-Max-Age"
 )
 
 const (

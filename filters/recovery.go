@@ -24,8 +24,8 @@ func (r Recovery) Filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
 			n := runtime.Stack(buf, false)
 			buf = buf[:n]
 
-			ctx.Resp.WriteHeader(http.StatusInternalServerError)
-			ctx.Env.Error("Panic:", ctx.Req.URL.String(), string(buf))
+			ctx.Status(http.StatusInternalServerError)
+			ctx.Env.GetLogger().Error("Panic:", ctx.Req.URL.String(), string(buf))
 		}
 	}()
 

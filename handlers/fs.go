@@ -17,8 +17,8 @@ type Fs struct {
 }
 
 func (f *Fs) Handle(ctx *roboot.Context) {
-	if ctx.Req.Method != "GET" {
-		ctx.Resp.WriteHeader(http.StatusMethodNotAllowed)
+	if ctx.Req.Method != roboot.MethodGet {
+		ctx.Status(http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -34,9 +34,9 @@ func (f *Fs) Handle(ctx *roboot.Context) {
 		stat, err := os.Stat(path)
 		if err != nil {
 			if os.IsNotExist(err) {
-				ctx.Resp.WriteHeader(http.StatusNotFound)
+				ctx.Status(http.StatusNotFound)
 			} else {
-				ctx.Resp.WriteHeader(http.StatusInternalServerError)
+				ctx.Status(http.StatusInternalServerError)
 				ctx.Env.Errorf("query path stat failed %s: %s", path, err.Error())
 			}
 			return
@@ -47,6 +47,6 @@ func (f *Fs) Handle(ctx *roboot.Context) {
 	if serveFile {
 		http.ServeFile(ctx.Resp, ctx.Req, path)
 	} else {
-		ctx.Resp.WriteHeader(http.StatusNotFound)
+		ctx.Status(http.StatusNotFound)
 	}
 }
