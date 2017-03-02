@@ -61,9 +61,11 @@ type ErrorHandler interface {
 
 type ErrorHandlerFunc func(*Context, int, error)
 
-func (e ErrorHandlerFunc) Handler(ctx *Context, status int, err error) {
+func (e ErrorHandlerFunc) Handle(ctx *Context, status int, err error) {
 	e(ctx, status, err)
 }
+
+var _ ErrorHandler = ErrorHandlerFunc(nil)
 
 type Env struct {
 	FileUpload struct {
