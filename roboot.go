@@ -3,7 +3,6 @@ package roboot
 import (
 	"errors"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -11,84 +10,109 @@ import (
 	"github.com/cosiner/httperrs"
 )
 
-type Params interface {
-	Len() int
-	Get(name string) string
-}
-
-type Logger interface {
-	Error(...interface{})
-	Errorf(string, ...interface{})
-}
-
-type stdLoggerT struct{}
-
-var stdLogger Logger = stdLoggerT{}
-
-func (stdLoggerT) Error(v ...interface{}) {
-	log.Println(v...)
-}
-
-func (stdLoggerT) Errorf(format string, v ...interface{}) {
-	log.Printf(format, v...)
-}
-
-type Encoder interface {
-	Encode(interface{}) error
-}
-
-type Decoder interface {
-	Decode(interface{}) error
-}
-
-type Codec interface {
-	ContentType() string
-	Marshal(interface{}) ([]byte, error)
-	NewEncoder(io.Writer) Encoder
-	Encode(io.Writer, interface{}) error
-	Unmarshal([]byte, interface{}) error
-	NewDecoder(io.Reader) Decoder
-	Decode(io.Reader, interface{}) error
-}
-
-type Renderer interface {
-	Render(io.Writer, string, interface{}) error
-}
-
-type ErrorHandler interface {
-	Handle(ctx *Context, status int, err error)
-}
-
-type ErrorHandlerFunc func(*Context, int, error)
-
-func (e ErrorHandlerFunc) Handle(ctx *Context, status int, err error) {
-	e(ctx, status, err)
-}
-
-var _ ErrorHandler = ErrorHandlerFunc(nil)
-
-type Env struct {
-	FileUpload struct {
-		MaxMemory int64
+//======================================================================================================================
+//    Env
+type (
+	Encoder interface {
+		Encode(interface{}) error
 	}
-	Logger
-	Codec
-	Renderer
-	ErrorHandler
-}
 
-func (e *Env) GetLogger() Logger {
-	logger := e.Logger
-	if logger != nil {
-		return logger
+	Decoder interface {
+		Decode(interface{}) error
 	}
-	return stdLogger
+
+	Codec interface {
+		ContentType() string
+		Marshal(interface{}) ([]byte, error)
+		NewEncoder(io.Writer) Encoder
+		Encode(io.Writer, interface{}) error
+		Unmarshal([]byte, interface{}) error
+		NewDecoder(io.Reader) Decoder
+		Decode(io.Reader, interface{}) error
+	}
+)
+
+type (
+	Renderer interface {
+		Render(io.Writer, string, interface{}) error
+	}
+)
+
+type (
+	ErrType uint8
+
+	ErrorHandler interface {
+		Log(ctx *Context, errType ErrType, err error)
+		Handle(ctx *Context, status int, err error)
+	}
+
+	Env struct {
+		// cant't be nil
+		Codec Codec
+		Error ErrorHandler
+
+		FileUpload struct {
+			MaxMemory int64
+		}
+		Renderer Renderer
+	}
+)
+
+const (
+	ErrTypeParseQuery ErrType = iota + 1
+	ErrTypeParseForm
+	ErrTypeParseMultipartForm
+	ErrTypePanic
+	ErrTypeHandle
+)
+
+func (e ErrType) String() string {
+	switch e {
+	case ErrTypeParseQuery:
+		return "ParseQuery"
+	case ErrTypeParseForm:
+		return "ParseForm"
+	case ErrTypeParseMultipartForm:
+		return "ParseMultipartForm"
+	case ErrTypePanic:
+		return "Panic"
+	case ErrTypeHandle:
+		return "Handle"
+	default:
+		return "Unknown"
+	}
 }
 
-type respWriter struct {
-	statusCode int
-	http.ResponseWriter
-}
+//======================================================================================================================
+//   Context
+type (
+	ResponseWriter interface {
+		StatusCode() int
+		http.ResponseWriter
+	}
+
+	respWriter struct {
+		statusCode int
+		http.ResponseWriter
+	}
+
+	Params interface {
+		Len() int
+		Get(name string) string
+	}
+
+	Context struct {
+		Req   *http.Request
+		Resp  ResponseWriter
+		Codec Codec
+
+		env     *Env
+		encoder Encoder
+		decoder Decoder
+		query   url.Values
+		params  Params
+	}
+)
 
 func (r *respWriter) WriteHeader(status int) {
 	if r.statusCode > 0 {
@@ -113,36 +137,23 @@ func (r *respWriter) StatusCode() int {
 	return r.statusCode
 }
 
-type ResponseWriter interface {
-	StatusCode() int
-	http.ResponseWriter
+func (ctx *Context) Env() *Env {
+	return ctx.env
 }
 
-type Context struct {
-	Req   *http.Request
-	Resp  ResponseWriter
-	Env   *Env
-	Codec Codec
-
-	encoder Encoder
-	decoder Decoder
-	query   url.Values
-	params  Params
+func (ctx *Context) ParamValue(name string) string {
+	return ctx.params.Get(name)
 }
 
 func (ctx *Context) queryValues() url.Values {
 	if ctx.query == nil {
 		params, err := url.ParseQuery(ctx.Req.URL.RawQuery)
 		if err != nil {
-			ctx.Env.GetLogger().Errorf("Roboot.Request: parse query failed: %s: %s", ctx.Req.URL.String(), err.Error())
+			ctx.Env().Error.Log(ctx, ErrTypeParseQuery, err)
 		}
 		ctx.query = params
 	}
 	return ctx.query
-}
-
-func (ctx *Context) ParamValue(name string) string {
-	return ctx.params.Get(name)
 }
 
 func (ctx *Context) QueryValue(name string) string {
@@ -159,7 +170,7 @@ func (ctx *Context) bodyValues() url.Values {
 		ctx.Req.URL.RawQuery = ""
 		err := ctx.Req.ParseForm()
 		if err != nil {
-			ctx.Env.GetLogger().Errorf("Roboot.Request: parse post form failed: %s: %s", ctx.Req.URL.String(), err.Error())
+			ctx.Env().Error.Log(ctx, ErrTypeParseForm, err)
 		}
 		ctx.Req.URL.RawQuery = tmpQuery
 	}
@@ -175,17 +186,18 @@ func (ctx *Context) BodyValues(name string) []string {
 }
 
 func (ctx *Context) multipartFormValues() *multipart.Form {
+	const defaultMaxMemory = 32 << 20 // 32M
 	if ctx.Req.MultipartForm == nil {
 		tmpQuery := ctx.Req.URL.RawQuery
 		ctx.Req.URL.RawQuery = ""
 
-		maxMemory := ctx.Env.FileUpload.MaxMemory
+		maxMemory := ctx.Env().FileUpload.MaxMemory
 		if maxMemory <= 0 {
-			maxMemory = 32 << 20 //32M
+			maxMemory = defaultMaxMemory
 		}
 		err := ctx.Req.ParseMultipartForm(maxMemory)
 		if err != nil {
-			ctx.Env.GetLogger().Errorf("Roboot.Request: parse multipart form failed: %s: %s", ctx.Req.URL.String(), err.Error())
+			ctx.Env().Error.Log(ctx, ErrTypeParseMultipartForm, err)
 		}
 		ctx.Req.URL.RawQuery = tmpQuery
 	}
@@ -208,24 +220,16 @@ func (ctx *Context) Files(name string) []*multipart.FileHeader {
 	return form.File[name]
 }
 
-var (
-	ErrEmptyCodec = errors.New("codec is empty")
-)
-
 func (ctx *Context) GetCodec() Codec {
 	if ctx.Codec != nil {
 		return ctx.Codec
 	}
-	return ctx.Env.Codec
+	return ctx.Env().Codec
 }
 
 func (ctx *Context) Decode(obj interface{}) error {
 	if ctx.decoder == nil {
-		codec := ctx.GetCodec()
-		if codec == nil {
-			return ErrEmptyCodec
-		}
-		ctx.decoder = codec.NewDecoder(ctx.Req.Body)
+		ctx.decoder = ctx.GetCodec().NewDecoder(ctx.Req.Body)
 	}
 	return ctx.decoder.Decode(obj)
 }
@@ -237,9 +241,6 @@ func (ctx *Context) Status(code int) {
 func (ctx *Context) Encode(obj interface{}, status int) error {
 	codec := ctx.GetCodec()
 	if ctx.encoder == nil {
-		if codec == nil {
-			return ErrEmptyCodec
-		}
 		ctx.encoder = codec.NewEncoder(ctx.Resp)
 	}
 	typ := ctx.Resp.Header().Get(HeaderContentType)
@@ -258,7 +259,7 @@ var (
 )
 
 func (ctx *Context) Render(name string, v interface{}) error {
-	renderer := ctx.Env.Renderer
+	renderer := ctx.Env().Renderer
 	if renderer == nil {
 		return ErrEmptyRenderer
 	}
@@ -266,71 +267,85 @@ func (ctx *Context) Render(name string, v interface{}) error {
 }
 
 func (ctx *Context) Error(err error) {
-	type errorInfo struct {
-		Error string `json:"error"`
-	}
-	statusCode := httperrs.StatusCode(err, http.StatusInternalServerError)
-	if ctx.Env.ErrorHandler == nil {
-		if statusCode >= http.StatusInternalServerError {
-			ctx.Env.GetLogger().Error("server failed:", err.Error())
-			ctx.Status(statusCode)
-		} else {
-			ctx.Encode(errorInfo{Error: err.Error()}, statusCode)
-		}
-	} else {
-		ctx.Env.ErrorHandler.Handle(ctx, statusCode, err)
-	}
+	ctx.Env().Error.Handle(ctx, httperrs.StatusCode(err, http.StatusInternalServerError), err)
 }
 
-type Handler interface {
-	Handle(*Context)
-}
+//======================================================================================================================
+//   Handler
+type (
+	Handler interface {
+		Handle(*Context)
+	}
 
-type HandlerFunc func(*Context)
+	HandlerFunc func(*Context)
+
+	Filter interface {
+		Filter(ctx *Context, chain HandlerFunc)
+	}
+
+	FilterFunc func(ctx *Context, chain HandlerFunc)
+
+	MatchedHandler struct {
+		Handler
+		Params
+	}
+
+	MatchedFilter struct {
+		Filter
+		Params
+	}
+
+	Router interface {
+		Handle(path string, handler Handler) error
+		Filter(path string, filters ...Filter) error
+		Group(prefix string) Router
+		Merge(prefix string, r Router) error
+
+		MatchHandler(path string) MatchedHandler
+		MatchFilters(path string) []MatchedFilter
+		MatchHandlerAndFilters(path string) (MatchedHandler, []MatchedFilter)
+	}
+)
 
 func (f HandlerFunc) Handle(ctx *Context) {
 	f(ctx)
 }
 
-type Filter interface {
-	Filter(ctx *Context, chain HandlerFunc)
-}
+//======================================================================================================================
+//   Server
+type (
+	Server interface {
+		Env() *Env
+		Router(h string) Router
+		Host(h string, r Router)
+		http.Handler
+	}
 
-type FilterFunc func(ctx *Context, chain HandlerFunc)
+	server struct {
+		defaultRouter Router
+		routers       map[string]Router
 
-type MatchedHandler struct {
-	Handler
-	Params
-}
+		env Env
+	}
 
-type MatchedFilter struct {
-	Filter
-	Params
-}
+	filterHandler struct {
+		filters []MatchedFilter
+		handler MatchedHandler
+	}
+)
 
-type Router interface {
-	Handle(path string, handler Handler) error
-	Filter(path string, filters ...Filter) error
-	Group(prefix string) Router
-	Merge(prefix string, r Router) error
-
-	MatchHandler(path string) MatchedHandler
-	MatchFilters(path string) []MatchedFilter
-	MatchHandlerAndFilters(path string) (MatchedHandler, []MatchedFilter)
-}
-
-type Server interface {
-	Env() *Env
-	Router(h string) Router
-	Host(h string, r Router)
-	http.Handler
-}
-
-type server struct {
-	defaultRouter Router
-	routers       map[string]Router
-
-	env Env
+func (f *filterHandler) Handle(ctx *Context) {
+	oldP := ctx.params
+	if len(f.filters) == 0 {
+		ctx.params = f.handler.Params
+		f.handler.Handler.Handle(ctx)
+	} else {
+		filter := f.filters[0]
+		f.filters = f.filters[1:]
+		ctx.params = filter.Params
+		filter.Filter.Filter(ctx, f.Handle)
+	}
+	ctx.params = oldP
 }
 
 func NewServer(env Env, defaultRouter Router) Server {
@@ -364,30 +379,11 @@ func (s *server) Host(host string, r Router) {
 	}
 }
 
-type filterHandler struct {
-	filters []MatchedFilter
-	handler MatchedHandler
-}
-
-func (f *filterHandler) Handle(ctx *Context) {
-	oldP := ctx.params
-	if len(f.filters) == 0 {
-		ctx.params = f.handler.Params
-		f.handler.Handler.Handle(ctx)
-	} else {
-		filter := f.filters[0]
-		f.filters = f.filters[1:]
-		ctx.params = filter.Params
-		filter.Filter.Filter(ctx, f.Handle)
-	}
-	ctx.params = oldP
-}
-
 func (s *server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := Context{
 		Req:  req,
 		Resp: &respWriter{ResponseWriter: w},
-		Env:  &s.env,
+		env:  &s.env,
 	}
 	r := s.Router(req.URL.Host)
 	if r == nil {
@@ -401,10 +397,8 @@ func (s *server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			ctx.Status(http.StatusNotFound)
 		})
 	}
-	h := filterHandler{
+	(&filterHandler{
 		filters: filters,
 		handler: handler,
-	}
-
-	h.Handle(&ctx)
+	}).Handle(&ctx)
 }

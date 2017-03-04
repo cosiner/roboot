@@ -13,7 +13,7 @@ type Fs struct {
 	Path   string
 
 	AllowDir bool
-	Pathvar  string
+	PathVar  string
 }
 
 func (f *Fs) Handle(ctx *roboot.Context) {
@@ -26,7 +26,7 @@ func (f *Fs) Handle(ctx *roboot.Context) {
 	if f.Static {
 		path = f.Path
 	} else {
-		path = filepath.Join(f.Path, ctx.ParamValue(f.Pathvar))
+		path = filepath.Join(f.Path, ctx.ParamValue(f.PathVar))
 	}
 
 	serveFile := f.AllowDir
@@ -36,8 +36,7 @@ func (f *Fs) Handle(ctx *roboot.Context) {
 			if os.IsNotExist(err) {
 				ctx.Status(http.StatusNotFound)
 			} else {
-				ctx.Status(http.StatusInternalServerError)
-				ctx.Env.Errorf("query path stat failed %s: %s", path, err.Error())
+				ctx.Env().Error.Handle(ctx, http.StatusInternalServerError, err)
 			}
 			return
 		}

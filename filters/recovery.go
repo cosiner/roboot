@@ -1,6 +1,7 @@
 package filters
 
 import (
+	"errors"
 	"net/http"
 	"runtime"
 
@@ -25,7 +26,7 @@ func (r Recovery) Filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
 			buf = buf[:n]
 
 			ctx.Status(http.StatusInternalServerError)
-			ctx.Env.GetLogger().Error("Panic:", ctx.Req.URL.String(), string(buf))
+			ctx.Env().Error.Log(ctx, roboot.ErrTypePanic, errors.New(string(buf)))
 		}
 	}()
 
