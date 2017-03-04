@@ -32,15 +32,11 @@ type (
 		NewDecoder(io.Reader) Decoder
 		Decode(io.Reader, interface{}) error
 	}
-)
 
-type (
 	Renderer interface {
 		Render(io.Writer, string, interface{}) error
 	}
-)
 
-type (
 	ErrType uint8
 
 	ErrorHandler interface {
@@ -357,6 +353,10 @@ func (f *filterHandler) Handle(ctx *Context) {
 }
 
 func NewServer(env Env, defaultRouter Router) Server {
+	if env.Error == nil || env.Codec == nil {
+		panic("error handler and codec should not be empty")
+	}
+
 	return &server{
 		defaultRouter: defaultRouter,
 
