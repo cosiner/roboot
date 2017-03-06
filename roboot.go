@@ -41,7 +41,7 @@ type (
 
 	ErrorHandler interface {
 		Log(ctx *Context, errType ErrType, err error)
-		Handle(ctx *Context, status int, err error)
+		Handle(ctx *Context, callerDepth, status int, err error)
 	}
 
 	Env struct {
@@ -267,7 +267,7 @@ func (ctx *Context) Render(name string, v interface{}) error {
 }
 
 func (ctx *Context) Error(err error) {
-	ctx.Env().Error.Handle(ctx, httperrs.StatusCode(err, http.StatusInternalServerError), err)
+	ctx.Env().Error.Handle(ctx, 1, httperrs.StatusCode(err, http.StatusInternalServerError), err)
 }
 
 //======================================================================================================================
