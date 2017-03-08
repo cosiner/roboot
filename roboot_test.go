@@ -14,10 +14,10 @@ func TestRoboot(t *testing.T) {
 
 	r := s.Router("")
 	r.Handle("/*path", roboot.HandlerFunc(func(ctx *roboot.Context) {
-		ctx.Resp.Write([]byte(ctx.Params.Get("path")))
+		ctx.Resp.Write([]byte(ctx.ParamValue("path")))
 	}))
 	r.Handle("/user/:id/info", roboot.HandlerFunc(func(ctx *roboot.Context) {
-		ctx.Resp.Write([]byte(ctx.Params.Get("id")))
+		ctx.Resp.Write([]byte(ctx.ParamValue("id")))
 	}))
 
 	req, _ := http.NewRequest("GET", "/user/id/info", nil)

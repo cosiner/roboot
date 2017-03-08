@@ -26,7 +26,7 @@ func (f *Fs) Handle(ctx *roboot.Context) {
 	if f.Static {
 		path = f.Path
 	} else {
-		path = filepath.Join(f.Path, ctx.Params.Get(f.Pathvar))
+		path = filepath.Join(f.Path, ctx.ParamValue(f.Pathvar))
 	}
 
 	serveFile := f.AllowDir

@@ -119,15 +119,15 @@ type ResponseWriter interface {
 }
 
 type Context struct {
-	Params Params
-	Req    *http.Request
-	Resp   ResponseWriter
-	Env    *Env
-	Codec  Codec
+	Req   *http.Request
+	Resp  ResponseWriter
+	Env   *Env
+	Codec Codec
 
 	encoder Encoder
 	decoder Decoder
 	query   url.Values
+	params  Params
 }
 
 func (ctx *Context) queryValues() url.Values {
@@ -139,6 +139,10 @@ func (ctx *Context) queryValues() url.Values {
 		ctx.query = params
 	}
 	return ctx.query
+}
+
+func (ctx *Context) ParamValue(name string) string {
+	return ctx.params.Get(name)
 }
 
 func (ctx *Context) QueryValue(name string) string {
@@ -366,17 +370,17 @@ type filterHandler struct {
 }
 
 func (f *filterHandler) Handle(ctx *Context) {
-	oldP := ctx.Params
+	oldP := ctx.params
 	if len(f.filters) == 0 {
-		ctx.Params = f.handler.Params
+		ctx.params = f.handler.Params
 		f.handler.Handler.Handle(ctx)
 	} else {
 		filter := f.filters[0]
 		f.filters = f.filters[1:]
-		ctx.Params = filter.Params
+		ctx.params = filter.Params
 		filter.Filter.Filter(ctx, f.Handle)
 	}
-	ctx.Params = oldP
+	ctx.params = oldP
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
