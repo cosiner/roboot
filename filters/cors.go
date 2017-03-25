@@ -68,12 +68,14 @@ func (c *CORS) ToFilter() roboot.Filter {
 }
 
 func (c *corsFilter) checkOrigin(origin string) bool {
-	var has bool
+	if origin == "" {
+		return true
+	}
 
+	var has bool
 	for i := 0; i < len(c.origins) && !has; i++ {
 		has = c.origins[i] == origin
 	}
-
 	return has
 }
 
