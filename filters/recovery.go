@@ -12,7 +12,9 @@ type Recovery struct {
 	Bufsize int
 }
 
-func (r Recovery) Filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
+var _ roboot.Filter = &Recovery{}
+
+func (r Recovery) Filter(ctx *roboot.Context, chain roboot.Handler) {
 	const defaultBufsize = 4096
 	defer func() {
 		if err := recover(); err != nil {
@@ -30,5 +32,5 @@ func (r Recovery) Filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
 		}
 	}()
 
-	chain(ctx)
+	chain.Handle(ctx)
 }

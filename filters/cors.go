@@ -132,12 +132,12 @@ func (c *corsFilter) preflight(ctx *roboot.Context, method, headers, origin stri
 	ctx.Status(http.StatusOK)
 }
 
-func (c *corsFilter) filter(ctx *roboot.Context, chain roboot.HandlerFunc, origin string) {
+func (c *corsFilter) filter(ctx *roboot.Context, chain roboot.Handler, origin string) {
 	c.setHeaders(ctx, origin)
-	chain(ctx)
+	chain.Handle(ctx)
 }
 
-func (c *corsFilter) Filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
+func (c *corsFilter) Filter(ctx *roboot.Context, chain roboot.Handler) {
 	origin := "*"
 	if len(c.origins) != 0 {
 		origin = ctx.Req.Header.Get(roboot.HeaderOrigin)

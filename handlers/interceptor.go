@@ -11,7 +11,7 @@ func (i *interceptor) Handle(ctx *roboot.Context) {
 	if i.filter == nil {
 		i.handler.Handle(ctx)
 	} else {
-		i.filter.Filter(ctx, i.handler.Handle)
+		i.filter.Filter(ctx, i.handler)
 	}
 }
 

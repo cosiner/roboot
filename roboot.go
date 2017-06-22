@@ -282,10 +282,10 @@ type (
 	HandlerFunc func(*Context)
 
 	Filter interface {
-		Filter(ctx *Context, chain HandlerFunc)
+		Filter(ctx *Context, chain Handler)
 	}
 
-	FilterFunc func(ctx *Context, chain HandlerFunc)
+	FilterFunc func(ctx *Context, chain Handler)
 
 	MatchedHandler struct {
 		Handler
@@ -347,7 +347,7 @@ func (f *filterHandler) Handle(ctx *Context) {
 		filter := f.filters[0]
 		f.filters = f.filters[1:]
 		ctx.params = filter.Params
-		filter.Filter.Filter(ctx, f.Handle)
+		filter.Filter.Filter(ctx, f)
 	}
 	ctx.params = oldP
 }

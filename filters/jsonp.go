@@ -9,6 +9,8 @@ import (
 // use as callback parameter name such as ?callback=xxx
 type JSONP string
 
+var _ roboot.Filter = JSONP(0)
+
 type buffRespWriter struct {
 	roboot.ResponseWriter
 	Buffer *bytes.Buffer
@@ -21,15 +23,15 @@ func (w *buffRespWriter) Write(b []byte) (int, error) {
 	return w.Buffer.Write(b)
 }
 
-func (j JSONP) Filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
+func (j JSONP) Filter(ctx *roboot.Context, chain roboot.Handler) {
 	if ctx.Req.Method != roboot.MethodGet {
-		chain(ctx)
+		chain.Handle(ctx)
 		return
 	}
 
 	callback := ctx.QueryValue(string(j))
 	if callback == "" {
-		chain(ctx)
+		chain.Handle(ctx)
 		return
 	}
 
@@ -39,7 +41,7 @@ func (j JSONP) Filter(ctx *roboot.Context, chain roboot.HandlerFunc) {
 		Buffer:         buffer,
 	}
 	ctx.Resp = &bw
-	chain(ctx)
+	chain.Handle(ctx)
 	bw.Buffer = nil
 
 	ctx.Resp.Write([]byte("("))

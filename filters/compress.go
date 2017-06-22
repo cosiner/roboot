@@ -88,7 +88,7 @@ func flateCompress(w roboot.ResponseWriter) (roboot.ResponseWriter, bool) {
 	}, true
 }
 
-func Compress(ctx *roboot.Context, chain roboot.HandlerFunc) {
+func Compress(ctx *roboot.Context, chain roboot.Handler) {
 	encoding := ctx.Req.Header.Get(roboot.HeaderAcceptEncoding)
 
 	var (
@@ -101,7 +101,7 @@ func Compress(ctx *roboot.Context, chain roboot.HandlerFunc) {
 		ctx.Resp, needClose = flateCompress(oldW)
 	}
 
-	chain(ctx)
+	chain.Handle(ctx)
 	if needClose {
 		ctx.Resp.Header().Del(roboot.HeaderContentLength)
 		cw, ok := ctx.Resp.(io.Closer)
@@ -111,3 +111,5 @@ func Compress(ctx *roboot.Context, chain roboot.HandlerFunc) {
 	}
 	ctx.Resp = oldW
 }
+
+var _ roboot.FilterFunc = Compress
