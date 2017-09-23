@@ -138,13 +138,10 @@ func (c *corsFilter) filter(ctx *roboot.Context, chain roboot.Handler, origin st
 }
 
 func (c *corsFilter) Filter(ctx *roboot.Context, chain roboot.Handler) {
-	origin := "*"
-	if len(c.origins) != 0 {
-		origin = ctx.Req.Header.Get(roboot.HeaderOrigin)
-		if !c.checkOrigin(origin) {
-			ctx.Status(http.StatusForbidden)
-			return
-		}
+	origin := ctx.Req.Header.Get(roboot.HeaderOrigin)
+	if len(c.origins) != 0 && !c.checkOrigin(origin) {
+		ctx.Status(http.StatusForbidden)
+		return
 	}
 
 	reqMethod := ctx.Req.Header.Get(roboot.HeaderCorsRequestMethod)
