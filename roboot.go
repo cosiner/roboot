@@ -106,11 +106,12 @@ type (
 		Resp  ResponseWriter
 		Codec Codec
 
-		env     *Env
-		encoder Encoder
-		decoder Decoder
-		query   url.Values
-		params  Params
+		env       *Env
+		encoder   Encoder
+		decoder   Decoder
+		urlQuery  url.Values
+		urlParams Params
+		ctxValues map[string]interface{}
 	}
 )
 
@@ -142,18 +143,18 @@ func (ctx *Context) Env() *Env {
 }
 
 func (ctx *Context) ParamValue(name string) string {
-	return ctx.params.Get(name)
+	return ctx.urlParams.Get(name)
 }
 
 func (ctx *Context) queryValues() url.Values {
-	if ctx.query == nil {
+	if ctx.urlQuery == nil {
 		params, err := url.ParseQuery(ctx.Req.URL.RawQuery)
 		if err != nil {
 			ctx.Env().Error.Log(ctx, ErrTypeParseQuery, err)
 		}
-		ctx.query = params
+		ctx.urlQuery = params
 	}
-	return ctx.query
+	return ctx.urlQuery
 }
 
 func (ctx *Context) QueryValue(name string) string {
@@ -183,6 +184,17 @@ func (ctx *Context) BodyValue(name string) string {
 
 func (ctx *Context) BodyValues(name string) []string {
 	return ctx.bodyValues()[name]
+}
+
+func (ctx *Context) ContextValue(name string) interface{} {
+	return ctx.ctxValues[name]
+}
+
+func (ctx *Context) SetContextValue(name string, val interface{}) {
+	if ctx.ctxValues == nil {
+		ctx.ctxValues = make(map[string]interface{})
+	}
+	ctx.ctxValues[name] = val
 }
 
 func (ctx *Context) multipartFormValues() *multipart.Form {
@@ -339,17 +351,17 @@ type (
 )
 
 func (f *filterHandler) Handle(ctx *Context) {
-	oldP := ctx.params
+	oldP := ctx.urlParams
 	if len(f.filters) == 0 {
-		ctx.params = f.handler.Params
+		ctx.urlParams = f.handler.Params
 		f.handler.Handler.Handle(ctx)
 	} else {
 		filter := f.filters[0]
 		f.filters = f.filters[1:]
-		ctx.params = filter.Params
+		ctx.urlParams = filter.Params
 		filter.Filter.Filter(ctx, f)
 	}
-	ctx.params = oldP
+	ctx.urlParams = oldP
 }
 
 func NewServer(env Env, defaultRouter Router) Server {
