@@ -325,6 +325,10 @@ func (f HandlerFunc) Handle(ctx *Context) {
 	f(ctx)
 }
 
+func (f FilterFunc) Filter(ctx *Context, chain Handler) {
+	f(ctx, chain)
+}
+
 //======================================================================================================================
 //   Server
 //
