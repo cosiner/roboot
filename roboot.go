@@ -1,19 +1,26 @@
 package roboot
 
 import (
-	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
-
-	"github.com/cosiner/httperrs"
 )
 
-//======================================================================================================================
-//    Env
-//
+//==============================================================================
+//                                Error
+//==============================================================================
+type errorString string
 
+func (e errorString) Error() string { return string(e) }
+func newError(s string) error {
+	return errorString(s)
+}
+
+//==============================================================================
+//                                Env
+//==============================================================================
 type (
 	Encoder interface {
 		Encode(interface{}) error
@@ -62,6 +69,8 @@ const (
 	ErrTypeParseMultipartForm
 	ErrTypePanic
 	ErrTypeHandle
+	ErrTypeRender
+	ErrTypeEncode
 )
 
 func (e ErrType) String() string {
@@ -76,15 +85,18 @@ func (e ErrType) String() string {
 		return "Panic"
 	case ErrTypeHandle:
 		return "Handle"
+	case ErrTypeRender:
+		return "Render"
+	case ErrTypeEncode:
+		return "Encode"
 	default:
 		return "Unknown"
 	}
 }
 
-//======================================================================================================================
-//   Context
-//
-
+//==============================================================================
+//                                Context
+//==============================================================================
 type (
 	ResponseWriter interface {
 		StatusCode() int
@@ -250,7 +262,7 @@ func (ctx *Context) Status(code int) {
 	ctx.Resp.WriteHeader(code)
 }
 
-func (ctx *Context) Encode(obj interface{}, status int) error {
+func (ctx *Context) Encode(obj interface{}, status int) {
 	codec := ctx.GetCodec()
 	if ctx.encoder == nil {
 		ctx.encoder = codec.NewEncoder(ctx.Resp)
@@ -263,29 +275,38 @@ func (ctx *Context) Encode(obj interface{}, status int) error {
 		status = http.StatusOK
 	}
 	ctx.Status(status)
-	return ctx.encoder.Encode(obj)
+	err := ctx.encoder.Encode(obj)
+	if err != nil {
+		ctx.env.Error.Log(ctx, ErrTypeEncode, err)
+	}
 }
 
 var (
-	ErrEmptyRenderer = errors.New("renderer is empty")
+	errEmptyRenderer = newError("renderer is empty")
 )
 
-func (ctx *Context) Render(name string, v interface{}) error {
+func (ctx *Context) Render(name string, v interface{}) {
 	renderer := ctx.Env().Renderer
 	if renderer == nil {
-		return ErrEmptyRenderer
+		ctx.Error(errEmptyRenderer, http.StatusInternalServerError)
+		return
 	}
-	return renderer.Render(ctx.Resp, name, v)
+	err := renderer.Render(ctx.Resp, name, v)
+	if err != nil {
+		ctx.env.Error.Log(ctx, ErrTypeRender, err)
+	}
 }
 
-func (ctx *Context) Error(err error) {
-	ctx.Env().Error.Handle(ctx, 1, httperrs.StatusCode(err, http.StatusInternalServerError), err)
+func (ctx *Context) Error(err error, statusCode int) {
+	if err == nil {
+		panic(fmt.Errorf("expect non-nil error"))
+	}
+	ctx.Env().Error.Handle(ctx, 1, statusCode, err)
 }
 
-//======================================================================================================================
-//   Handler
-//
-
+//==============================================================================
+//                                Handler
+//==============================================================================
 type (
 	Handler interface {
 		Handle(*Context)
@@ -329,10 +350,9 @@ func (f FilterFunc) Filter(ctx *Context, chain Handler) {
 	f(ctx, chain)
 }
 
-//======================================================================================================================
-//   Server
-//
-
+//==============================================================================
+//                                Server
+//==============================================================================
 type (
 	Server interface {
 		Env() *Env
@@ -411,14 +431,14 @@ func (s *server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	r := s.Router(req.URL.Host)
 	if r == nil {
-		ctx.Status(http.StatusNotFound)
+		ctx.Error(newError("resource not found"), http.StatusNotFound)
 		return
 	}
 
 	handler, filters := r.MatchHandlerAndFilters(req.URL.Path)
 	if handler.Handler == nil {
 		handler.Handler = HandlerFunc(func(ctx *Context) {
-			ctx.Status(http.StatusNotFound)
+			ctx.Error(newError("resource not found"), http.StatusNotFound)
 		})
 	}
 	(&filterHandler{

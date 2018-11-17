@@ -36,7 +36,7 @@ func (f *Fs) Handle(ctx *roboot.Context) {
 			if os.IsNotExist(err) {
 				ctx.Status(http.StatusNotFound)
 			} else {
-				ctx.Error(err)
+				ctx.Error(err, http.StatusInternalServerError)
 			}
 			return
 		}
