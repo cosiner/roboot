@@ -1,12 +1,24 @@
 package filters
 
 import (
-	"errors"
+	"fmt"
 	"net/http"
+	"reflect"
 	"runtime"
+	"unsafe"
 
 	"github.com/cosiner/roboot"
 )
+
+func unsafeToString(b []byte) (s string) {
+	pbytes := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	pstring := (*reflect.StringHeader)(unsafe.Pointer(&s))
+
+	pstring.Data = pbytes.Data
+	pstring.Len = pbytes.Len
+
+	return
+}
 
 type Recovery struct {
 	Bufsize int
@@ -18,7 +30,6 @@ func (r Recovery) Filter(ctx *roboot.Context, chain roboot.Handler) {
 	const defaultBufsize = 4096
 	defer func() {
 		if err := recover(); err != nil {
-
 			bufsize := r.Bufsize
 			if bufsize <= 0 {
 				bufsize = defaultBufsize
@@ -28,7 +39,7 @@ func (r Recovery) Filter(ctx *roboot.Context, chain roboot.Handler) {
 			buf = buf[:n]
 
 			ctx.Status(http.StatusInternalServerError)
-			ctx.Env().Error.Log(ctx, roboot.ErrTypePanic, errors.New(string(buf)))
+			ctx.Env().Error.Log(ctx, roboot.ErrTypePanic, fmt.Errorf("panic: %v, stack: %s", err, unsafeToString(buf)))
 		}
 	}()
 
