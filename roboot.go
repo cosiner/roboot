@@ -118,6 +118,7 @@ type (
 		Resp  ResponseWriter
 		Codec Codec
 
+		httpW     http.ResponseWriter
 		env       *Env
 		encoder   Encoder
 		decoder   Decoder
@@ -152,6 +153,10 @@ func (r *respWriter) StatusCode() int {
 
 func (ctx *Context) Env() *Env {
 	return ctx.env
+}
+
+func (ctx *Context) OriginalHTTPResponseWriter() http.ResponseWriter {
+	return ctx.httpW
 }
 
 func (ctx *Context) ParamValue(name string) string {
@@ -425,9 +430,10 @@ func (s *server) Host(host string, r Router) {
 
 func (s *server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := Context{
-		Req:  req,
-		Resp: &respWriter{ResponseWriter: w},
-		env:  &s.env,
+		Req:   req,
+		Resp:  &respWriter{ResponseWriter: w},
+		env:   &s.env,
+		httpW: w,
 	}
 	r := s.Router(req.URL.Host)
 	if r == nil {
