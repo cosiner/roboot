@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"compress/flate"
 	"compress/gzip"
-	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -13,64 +12,40 @@ import (
 	"github.com/cosiner/roboot"
 )
 
-var errHijack = errors.New("Response is not hijackable")
-
-type gzipWriter struct {
-	gw *gzip.Writer
+type compressWriter struct {
+	hijacked bool
+	cw       io.WriteCloser
 	roboot.ResponseWriter
 }
 
-func (w gzipWriter) Write(data []byte) (int, error) {
-	return w.gw.Write(data)
+func (w *compressWriter) Write(data []byte) (int, error) {
+	return w.cw.Write(data)
 }
 
-func (w gzipWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+func (w *compressWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	hijacker, is := w.ResponseWriter.(http.Hijacker)
 	if !is {
-		return nil, nil, errHijack
+		return nil, nil, roboot.ErrHijack
 	}
 
-	w.gw.Close()
+	w.hijacked = true
+	w.ResponseWriter.Header().Del(roboot.HeaderContentEncoding)
 
 	return hijacker.Hijack()
 }
 
-func (w gzipWriter) Close() error {
-	err := w.gw.Close()
-
-	return err
-}
-
-type flateWriter struct {
-	fw *flate.Writer
-	roboot.ResponseWriter
-}
-
-func (w flateWriter) Write(data []byte) (int, error) {
-	return w.fw.Write(data)
-}
-
-func (w flateWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	hijacker, is := w.ResponseWriter.(http.Hijacker)
-	if !is {
-		return nil, nil, errHijack
+func (w *compressWriter) Close() error {
+	if !w.hijacked {
+		return w.cw.Close()
 	}
 
-	w.fw.Close()
-
-	return hijacker.Hijack()
-}
-
-func (w flateWriter) Close() error {
-	err := w.fw.Close()
-
-	return err
+	return nil
 }
 
 func gzipCompress(w roboot.ResponseWriter) (roboot.ResponseWriter, bool) {
 	w.Header().Set(roboot.HeaderContentEncoding, roboot.ContentEncodingGzip)
-	return gzipWriter{
-		gw:             gzip.NewWriter(w),
+	return &compressWriter{
+		cw:             gzip.NewWriter(w),
 		ResponseWriter: w,
 	}, true
 }
@@ -82,8 +57,8 @@ func flateCompress(w roboot.ResponseWriter) (roboot.ResponseWriter, bool) {
 	}
 
 	w.Header().Set(roboot.HeaderContentEncoding, roboot.ContentEncodingDeflate)
-	return flateWriter{
-		fw:             fw,
+	return &compressWriter{
+		cw:             fw,
 		ResponseWriter: w,
 	}, true
 }
@@ -92,17 +67,17 @@ func Compress(ctx *roboot.Context, chain roboot.Handler) {
 	encoding := ctx.Req.Header.Get(roboot.HeaderAcceptEncoding)
 
 	var (
-		needClose bool
-		oldW      = ctx.Resp
+		compressed bool
+		oldW       = ctx.Resp
 	)
 	if strings.Contains(encoding, roboot.ContentEncodingGzip) {
-		ctx.Resp, needClose = gzipCompress(oldW)
+		ctx.Resp, compressed = gzipCompress(oldW)
 	} else if strings.Contains(encoding, roboot.ContentEncodingDeflate) {
-		ctx.Resp, needClose = flateCompress(oldW)
+		ctx.Resp, compressed = flateCompress(oldW)
 	}
 
 	chain.Handle(ctx)
-	if needClose {
+	if compressed {
 		ctx.Resp.Header().Del(roboot.HeaderContentLength)
 		cw, ok := ctx.Resp.(io.Closer)
 		if ok {

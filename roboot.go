@@ -1,9 +1,12 @@
 package roboot
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 )
@@ -119,6 +122,7 @@ type (
 		Codec Codec
 
 		httpW     http.ResponseWriter
+		hijacked  bool
 		env       *Env
 		encoder   Encoder
 		decoder   Decoder
@@ -144,6 +148,17 @@ func (r *respWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
+var ErrHijack = errors.New("response is not hijackable")
+
+func (r *respWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, is := r.ResponseWriter.(http.Hijacker)
+	if !is {
+		return nil, nil, ErrHijack
+	}
+
+	return hijacker.Hijack()
+}
+
 func (r *respWriter) StatusCode() int {
 	if r.statusCode == 0 {
 		return http.StatusOK
@@ -155,9 +170,11 @@ func (ctx *Context) Env() *Env {
 	return ctx.env
 }
 
-func (ctx *Context) OriginalHTTPResponseWriter() http.ResponseWriter {
-	return ctx.httpW
+func (ctx *Context) Hijack(hijacker func(w http.ResponseWriter) error) error {
+	ctx.hijacked = true
+	return hijacker(ctx.httpW)
 }
+func (ctx *Context) Hijacked() bool { return ctx.hijacked }
 
 func (ctx *Context) ParamValue(name string) string {
 	return ctx.urlParams.Get(name)
