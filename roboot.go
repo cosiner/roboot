@@ -121,8 +121,6 @@ type (
 		Resp  ResponseWriter
 		Codec Codec
 
-		httpW     http.ResponseWriter
-		hijacked  bool
 		env       *Env
 		encoder   Encoder
 		decoder   Decoder
@@ -169,12 +167,6 @@ func (r *respWriter) StatusCode() int {
 func (ctx *Context) Env() *Env {
 	return ctx.env
 }
-
-func (ctx *Context) Hijack(hijacker func(w http.ResponseWriter) error) error {
-	ctx.hijacked = true
-	return hijacker(ctx.httpW)
-}
-func (ctx *Context) Hijacked() bool { return ctx.hijacked }
 
 func (ctx *Context) ParamValue(name string) string {
 	return ctx.urlParams.Get(name)
@@ -447,10 +439,9 @@ func (s *server) Host(host string, r Router) {
 
 func (s *server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := Context{
-		Req:   req,
-		Resp:  &respWriter{ResponseWriter: w},
-		env:   &s.env,
-		httpW: w,
+		Req:  req,
+		Resp: &respWriter{ResponseWriter: w},
+		env:  &s.env,
 	}
 	r := s.Router(req.URL.Host)
 	if r == nil {
